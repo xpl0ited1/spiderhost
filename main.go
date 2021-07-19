@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/tebeka/selenium"
+	"github.com/tebeka/selenium/chrome"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -12,7 +14,6 @@ import (
 	"sync"
 	"time"
 )
-
 
 //Global Constants
 
@@ -41,6 +42,7 @@ var othersTLD = [...]string{
 var src = rand.NewSource(time.Now().UnixNano())
 
 var opt = "o"
+
 //TOR can be changed to wathever ip and port
 var TOR = "127.0.0.1:9050"
 
@@ -66,7 +68,6 @@ func main() {
 
 func test(x int, ct context.Context) {
 
-
 	var wg sync.WaitGroup
 	for i := 1; i <= 20; i++ {
 		wg.Add(1)
@@ -78,28 +79,30 @@ func test(x int, ct context.Context) {
 
 func worker(id int, wg *sync.WaitGroup, i int, ct context.Context) {
 
-
-	ctx, cancel := context.WithTimeout(ct, 5 * time.Second)
+	ctx, cancel := context.WithTimeout(ct, 5*time.Second)
 	defer wg.Done()
 	defer cancel()
 
 	select {
 	case <-time.After(3 * time.Second):
 		host := generateOne()
-		fmt.Println("[Cycle #" + strconv.Itoa(i) + " Worker #"+ strconv.Itoa(id)+ "]Testing " + host)
+		fmt.Println("[Cycle #" + strconv.Itoa(i) + " Worker #" + strconv.Itoa(id) + "]Testing " + host)
 		isAlive, err := pingHost(host)
+
 		if err != nil {
 			//log.Println(err)
 		}
 
-		if isAlive{
-			fmt.Println("[Cycle #" + strconv.Itoa(i) + " Worker #"+ strconv.Itoa(id)+ "] " + host + " is a valid host")
+		if isAlive {
+			fmt.Println("[Cycle #" + strconv.Itoa(i) + " Worker #" + strconv.Itoa(id) + "] " + host + " is a valid host")
 			err := saveValidHost(host)
 			if err != nil {
+				log.Println(err)
 				return
 			}
-		}else{
-			fmt.Println("[Cycle #" + strconv.Itoa(i) + " Worker #"+ strconv.Itoa(id)+ "] " + host + " is not a valid host")
+			takeScreenshot(host)
+		} else {
+			fmt.Println("[Cycle #" + strconv.Itoa(i) + " Worker #" + strconv.Itoa(id) + "] " + host + " is not a valid host")
 		}
 
 		return
@@ -107,12 +110,8 @@ func worker(id int, wg *sync.WaitGroup, i int, ct context.Context) {
 		fmt.Println("done") // prints "context deadline exceeded"
 	}
 
-
-
 	//time.Sleep(time.Second*5)
 }
-
-
 
 func RandStringBytesMaskImprSrc(n int) string {
 	b := make([]byte, n)
@@ -132,10 +131,6 @@ func RandStringBytesMaskImprSrc(n int) string {
 	return string(b)
 }
 
-func htmlToImage(html string){
-	//TODO: HTML TO IMAGE
-}
-
 func generateOne() string {
 	min := 16
 	max := 56
@@ -145,11 +140,13 @@ func generateOne() string {
 
 	if opt == "o" {
 		tld = onion
-	}else{
-		tld = othersTLD[rand.Intn(len(othersTLD) - 1 + 1)]
+	} else {
+		tld = othersTLD[rand.Intn(len(othersTLD)-1+1)]
 	}
 
-	host := RandStringBytesMaskImprSrc(rand.Intn(max - min + 1) + min) + tld
+	host := RandStringBytesMaskImprSrc(rand.Intn(max-min+1)+min) + tld
+	//For debugging
+	//host = "3g2upl4pq6kufc4m.onion"
 
 	return host
 }
@@ -160,7 +157,7 @@ func pingHost(host string) (bool, error) {
 	//example url propub3r6espa33w.onion
 	//host = "3g2upl4pq6kufc4m.onion"
 
-	_, err := http.Get("http://"+host)
+	_, err := http.Get("http://" + host)
 
 	if err != nil {
 		return false, err
@@ -175,7 +172,7 @@ func getHostContent(host string) (string, error) {
 	//example url propub3r6espa33w.onion
 	//host = "3g2upl4pq6kufc4m.onion"
 
-	resp, err := http.Get("http://"+host)
+	resp, err := http.Get("http://" + host)
 
 	if err != nil {
 		return "", err
@@ -199,15 +196,15 @@ func getHostContent(host string) (string, error) {
 	return html, nil
 }
 
-func saveValidHost(host string) error{
+func saveValidHost(host string) error {
 	err := createFile(validHostsFilePath)
-	if err != nil{
+	if err != nil {
 		return err
 		log.Println(err)
 	}
 
 	err = writeFile(validHostsFilePath, host)
-	if err != nil{
+	if err != nil {
 		return err
 		log.Println(err)
 	}
@@ -231,14 +228,14 @@ func createFile(path string) error {
 
 func writeFile(path string, data string) error {
 	// Open file using READ & WRITE permission.
-	var file, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	var file, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
 	// Write some text line-by-line to file.
-	_, err = file.WriteString(data+"\n")
+	_, err = file.WriteString(data + "\n")
 	if err != nil {
 		return err
 	}
@@ -252,10 +249,31 @@ func writeFile(path string, data string) error {
 	return nil
 }
 
+func saveScreenshot(host string, data []byte) error {
+	// Open file using READ & WRITE permission.
+	var file, err = os.OpenFile("./out/"+host+".png", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
+	// Write some text line-by-line to file.
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+
+	// Save file changes.
+	err = file.Sync()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 //Debugging functions
-func testGenerate(){
+func testGenerate() {
 	min := 10
 	max := 30
 	tld := ""
@@ -264,41 +282,70 @@ func testGenerate(){
 
 	if opt == "o" {
 		tld = onion
-	}else{
-		tld = othersTLD[rand.Intn(len(othersTLD) - 1 + 1)]
+	} else {
+		tld = othersTLD[rand.Intn(len(othersTLD)-1+1)]
 	}
 
-	host := RandStringBytesMaskImprSrc(rand.Intn(max - min + 1) + min) + tld
+	host := RandStringBytesMaskImprSrc(rand.Intn(max-min+1)+min) + tld
 
 	fmt.Println(host)
 	testPing(host)
 }
 
-func testPing(host string){
+func testPing(host string) {
 
-	os.Setenv("HTTP_PROXY", "socks5://127.0.0.1:9050")
+	os.Setenv("HTTP_PROXY", "socks4://127.0.0.1:9050")
 
 	//example url propub3r6espa33w.onion
 	host = "3g2upl4pq6kufc4m.onion"
+	takeScreenshot(host)
 
-	resp, err := http.Get("http://"+host)
+}
 
+func takeScreenshot(host string) {
+
+	const (
+		// These paths will be different on your system.
+		seleniumPath     = "selenium-server-standalone-3.141.59.jar"
+		geckoDriverPath  = "geckodriver"
+		chromeDriverPath = "chromedriver"
+		port             = 8080
+	)
+	opts := []selenium.ServiceOption{
+		//selenium.StartFrameBuffer(),           // Start an X frame buffer for the browser to run in.
+		selenium.ChromeDriver(chromeDriverPath), // Specify the path to GeckoDriver in order to use Firefox.
+		selenium.Output(os.Stderr),              // Output debug information to STDERR.
+	}
+	selenium.SetDebug(true)
+	service, err := selenium.NewSeleniumService(seleniumPath, port, opts...)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err) // panic is used only as an example and is not otherwise recommended.
 	}
+	defer service.Stop()
 
-	defer resp.Body.Close()
+	// Connect to the WebDriver instance running locally.
+	caps := selenium.Capabilities{}
 
-	if resp.StatusCode != http.StatusOK {
-		log.Fatal(fmt.Errorf("Status error: %v", resp.StatusCode))
-
-	}
-
-	data, err := ioutil.ReadAll(resp.Body)
+	caps.AddChrome(chrome.Capabilities{
+		Path: "/usr/bin/google-chrome",
+		Args: []string{"--headless", "--proxy-server=socks5://127.0.0.1:9050"},
+	})
+	wd, err := selenium.NewRemote(caps, fmt.Sprintf("http://localhost:%d/wd/hub", port))
 	if err != nil {
-		log.Fatal(fmt.Errorf("Read body: %v", err))
+		panic(err)
 	}
-	//fmt.Println(string(data))
-	var html = string(data)
-	htmlToImage(html)
+	defer wd.Quit()
+
+	// Navigate to the simple playground interface.
+	if err := wd.Get("https://" + host); err != nil {
+		log.Println(err)
+	}
+
+	data, err := wd.Screenshot()
+	if err != nil {
+		log.Println(err)
+	}
+
+	saveScreenshot(host, data)
+
 }
